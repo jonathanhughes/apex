@@ -20,13 +20,12 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/lambda"
 	"github.com/aws/aws-sdk-go/service/lambda/lambdaiface"
-	"github.com/dustin/go-humanize"
-	"gopkg.in/validator.v2"
-
 	"github.com/apex/apex/archive"
 	"github.com/apex/apex/hooks"
 	"github.com/apex/apex/utils"
 	"github.com/apex/apex/vpc"
+	"gopkg.in/validator.v2"
+	"github.com/dustin/go-humanize"
 )
 
 // timelessInfo is used to zero mtime which causes function checksums
@@ -93,6 +92,7 @@ type Config struct {
 	Handler          string            `json:"handler" validate:"nonzero"`
 	Shim             bool              `json:"shim"`
 	Environment      map[string]string `json:"environment"`
+	Tags             map[string]string `json:"tags"`
 	Hooks            hooks.Hooks       `json:"hooks"`
 	RetainedVersions *int              `json:"retainedVersions"`
 	VPC              vpc.VPC           `json:"vpc"`
@@ -312,6 +312,10 @@ func (f *Function) DeployConfigAndCode(zip []byte) error {
 			SubnetIds:        aws.StringSlice(f.VPC.Subnets),
 		},
 	}
+	config, _ := f.GetConfig()
+	if f.Tags != nil {
+		f.Service.TagResource(f.tags(config))
+	}
 
 	if f.DeadLetterARN != "" {
 		params.DeadLetterConfig = &lambda.DeadLetterConfig{
@@ -394,6 +398,7 @@ func (f *Function) Update(zip []byte) error {
 // Create the function with the given `zip`.
 func (f *Function) Create(zip []byte) error {
 	f.Log.Info("creating function")
+	config, _ := f.GetConfig()
 
 	params := &lambda.CreateFunctionInput{
 		FunctionName: &f.FunctionName,
@@ -406,6 +411,7 @@ func (f *Function) Create(zip []byte) error {
 		KMSKeyArn:    &f.KMSKeyArn,
 		Publish:      aws.Bool(true),
 		Environment:  f.environment(),
+		Tags:         f.tags(config).Tags,
 		Code: &lambda.FunctionCode{
 			ZipFile: zip,
 		},
@@ -537,7 +543,7 @@ func (f *Function) Rollback() error {
 	}
 
 	if len(versions) < 2 {
-		return errors.New("Can't rollback. Only one version deployed.")
+		return errors.New("can't rollback. Only one version deployed")
 	}
 
 	latest := *versions[len(versions)-1].Version
@@ -577,7 +583,7 @@ func (f *Function) RollbackVersion(version string) error {
 	f.Log.Debugf("current version: %s", *alias.FunctionVersion)
 
 	if version == *alias.FunctionVersion {
-		return errors.New("Specified version currently deployed.")
+		return errors.New("specified version currently deployed")
 	}
 
 	f.Log.Infof("rollback to version: %s", version)
@@ -694,9 +700,9 @@ func (f *Function) GroupName() string {
 	return fmt.Sprintf("/aws/lambda/%s", f.FunctionName)
 }
 
-// Return function version from alias name, if alias not found, return the input
+// GetVersionFromAlias returns function version from alias name, if alias not found, return the input
 func (f *Function) GetVersionFromAlias(alias string) (string, error) {
-	var version string = alias
+	var version = alias
 	aliases, err := f.GetAliases()
 	if err != nil {
 		return version, err
@@ -790,6 +796,7 @@ func (f *Function) configChanged(config *lambda.GetFunctionOutput) bool {
 		Handler          string
 		VPC              vpc.VPC
 		Environment      []string
+		Tags             []string
 		KMSKeyArn        string
 		DeadLetterConfig lambda.DeadLetterConfig
 	}
@@ -802,7 +809,8 @@ func (f *Function) configChanged(config *lambda.GetFunctionOutput) bool {
 		Runtime:     f.Runtime,
 		Handler:     f.Handler,
 		KMSKeyArn:   f.KMSKeyArn,
-		Environment: environ(f.environment().Variables),
+		Environment: sortAndJoin(f.environment().Variables),
+		Tags:        sortAndJoin(f.tags(config).Tags),
 		VPC: vpc.VPC{
 			Subnets:        f.VPC.Subnets,
 			SecurityGroups: f.VPC.SecurityGroups,
@@ -829,7 +837,11 @@ func (f *Function) configChanged(config *lambda.GetFunctionOutput) bool {
 	}
 
 	if config.Configuration.Environment != nil {
-		remoteConfig.Environment = environ(config.Configuration.Environment.Variables)
+		remoteConfig.Environment = sortAndJoin(config.Configuration.Environment.Variables)
+	}
+
+	if config.Tags != nil {
+		remoteConfig.Tags = sortAndJoin(config.Tags)
 	}
 
 	if config.Configuration.DeadLetterConfig != nil {
@@ -915,19 +927,29 @@ func (f *Function) environment() *lambda.Environment {
 	return &lambda.Environment{Variables: env}
 }
 
-// environment sorted and joined.
-func environ(env map[string]*string) []string {
+// tags for lambda calls.
+func (f *Function) tags(config *lambda.GetFunctionOutput) *lambda.TagResourceInput {
+	tags := make(map[string]*string)
+	for k, v := range f.Tags {
+		tags[k] = aws.String(v)
+	}
+	return &lambda.TagResourceInput{ Resource: config.Configuration.FunctionArn,
+		Tags: tags }
+}
+
+// maps sorted and joined.
+func sortAndJoin(unsortedMap map[string]*string) []string {
 	var keys []string
 	var pairs []string
 
-	for k := range env {
+	for k := range unsortedMap {
 		keys = append(keys, k)
 	}
 
 	sort.Strings(keys)
 
 	for _, k := range keys {
-		pairs = append(pairs, fmt.Sprintf("%s=%s", k, *env[k]))
+		pairs = append(pairs, fmt.Sprintf("%s=%s", k, *unsortedMap[k]))
 	}
 
 	return pairs

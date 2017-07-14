@@ -53,6 +53,7 @@ type Config struct {
 	RetainedVersions   *int              `json:"retainedVersions"`
 	DefaultEnvironment string            `json:"defaultEnvironment"`
 	Environment        map[string]string `json:"environment"`
+	Tags               map[string]string `json:"tags"`
 	Hooks              hooks.Hooks       `json:"hooks"`
 	VPC                vpc.VPC           `json:"vpc"`
 	Zip                string            `json:"zip"`
@@ -347,6 +348,7 @@ func (p *Project) LoadFunctionByPath(name, path string) (*function.Function, err
 			Shim:             p.Shim,
 			Hooks:            p.Hooks,
 			Environment:      copyStringMap(p.Config.Environment),
+			Tags:             copyStringMap(p.Config.Tags),
 			RetainedVersions: p.RetainedVersions,
 			VPC:              copyVPC(p.VPC),
 			Zip:              p.Zip,

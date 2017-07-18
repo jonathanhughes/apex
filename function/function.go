@@ -20,12 +20,13 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/lambda"
 	"github.com/aws/aws-sdk-go/service/lambda/lambdaiface"
+	"github.com/dustin/go-humanize"
+	"gopkg.in/validator.v2"
+
 	"github.com/apex/apex/archive"
 	"github.com/apex/apex/hooks"
 	"github.com/apex/apex/utils"
 	"github.com/apex/apex/vpc"
-	"gopkg.in/validator.v2"
-	"github.com/dustin/go-humanize"
 )
 
 // timelessInfo is used to zero mtime which causes function checksums

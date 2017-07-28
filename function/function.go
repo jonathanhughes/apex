@@ -930,8 +930,7 @@ func (f *Function) environment() *lambda.Environment {
 
 // tags for lambda calls.
 func (f *Function) tags(config *lambda.GetFunctionOutput) *lambda.TagResourceInput {
-	tags := make(map[string]*string)
-	tags = aws.StringMap(f.Tags);
+	tags := aws.StringMap(f.Tags);
 	return &lambda.TagResourceInput{ Resource: config.Configuration.FunctionArn,
 		Tags: tags }
 }

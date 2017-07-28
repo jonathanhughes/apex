@@ -703,7 +703,7 @@ func (f *Function) GroupName() string {
 
 // GetVersionFromAlias returns function version from alias name, if alias not found, return the input
 func (f *Function) GetVersionFromAlias(alias string) (string, error) {
-	var version = alias
+	version := alias
 	aliases, err := f.GetAliases()
 	if err != nil {
 		return version, err
@@ -931,26 +931,24 @@ func (f *Function) environment() *lambda.Environment {
 // tags for lambda calls.
 func (f *Function) tags(config *lambda.GetFunctionOutput) *lambda.TagResourceInput {
 	tags := make(map[string]*string)
-	for k, v := range f.Tags {
-		tags[k] = aws.String(v)
-	}
+	tags = aws.StringMap(f.Tags);
 	return &lambda.TagResourceInput{ Resource: config.Configuration.FunctionArn,
 		Tags: tags }
 }
 
 // maps sorted and joined.
-func sortAndJoin(unsortedMap map[string]*string) []string {
+func sortAndJoin(mp map[string]*string) []string {
 	var keys []string
 	var pairs []string
 
-	for k := range unsortedMap {
+	for k := range mp {
 		keys = append(keys, k)
 	}
 
 	sort.Strings(keys)
 
 	for _, k := range keys {
-		pairs = append(pairs, fmt.Sprintf("%s=%s", k, *unsortedMap[k]))
+		pairs = append(pairs, fmt.Sprintf("%s=%s", k, *mp[k]))
 	}
 
 	return pairs
